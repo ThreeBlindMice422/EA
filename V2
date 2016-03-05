@@ -1,0 +1,186 @@
+*--------------------------------------------------------------------
+* Title      :  EA Disassembler
+* Written by :  Bonnie Yip
+* Date       :
+* Description:  
+*--------------------------------------------------------------------
+                ORG    $1000
+START:
+
+sourceData1     EQU     %000011 *mode=000, Reg=3
+sourceData2     EQU     %001100 *mode=001, Reg=4
+destData        EQU     %001000 *Reg=1, mode=000 
+CR              EQU     $0D         
+LF              EQU     $0A
+                 
+                LEA     instructionArray,A1  *A1 is buffer
+                                             *A2 points to mode_table
+                                             *A3 points to reg_table
+                MOVE.B  #$00,(A1)            *Add 00 to buffer
+*------------------------- Source Data ------------------------------
+                MOVE.W  #sourceData1,D2 *copy source data to d2
+                
+                *********** Mode **********
+                CLR.L   D5
+                MOVE.W  D2,D5
+                
+                LSR.W   #3, D5          *Shift 3 bits to the right to get rid of register #
+                                        *3-bit mode# is now in D5   
+                
+                ********** Register ********
+                CLR.L   D6
+                MOVE.W  D2,D6
+                
+                LSL.W   #8,D6           *Shift to the left to get register # separate from mode
+                LSL.W   #5,D6
+                
+                LSR.L   #8,D6           *Shift back to the right to get register number
+                LSR.L   #5,D6
+                                        *3-bit register# is now in D6
+                
+                LEA     mode_table,A2   *Form offset
+                MULU    #6,D5           *Jump indirect with index
+                JSR     0(A2,D5)
+               
+                MOVE.B  #',',(A1)+
+                
+*------------------------ Destination Data --------------------------
+                MOVE.W  #destData,D3  
+                
+                *********** Register **********
+                CLR.L   D6
+                MOVE.W  D2,D6
+                
+                LSR.W   #3,D6           *Shift 3 bits to the right to get rid of mode #
+                
+                                        *3-bit register# is now in D6
+                
+                ************ Mode ************
+                CLR.L   D5
+                MOVE.W  D2,D5
+                
+                LSL.W   #8,D5           *Shift to the left to get mode # separate from register
+                LSL.W   #5,D5
+                
+                LSR.L   #8,D5           *Shift back to the right to isolate mode number
+                LSR.L   #5,D5
+                                        *3-bit mode# is now in D5   
+                
+                LEA     mode_table,A2
+                MULU    #6,D5           *Form offset
+                JSR     0(A2,D5)        *Jump indirect with index
+                
+             
+*-------------------- Addressing Mode Table ----------------------------
+mode_table      JMP     mode000     * Data Register - Dn
+                JMP     mode001     * Address Register - An
+                JMP     mode010     * Indirect Address Register - (An)
+                JMP     mode011     * Address Post Increment - (An)+
+                JMP     mode100     * Address Pre Decrement - -(An)
+                *JMP     mode101    * ERROR EA
+                *JMP     mode110    * ERROR EA
+                JMP     mode111     *(xxx).W, (xxx).L, #<data>
+            
+mode000         MOVE.B  #'D',(A1)+
+                
+                LEA     reg_table,A3    *Load jump table for reg_table
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                RTS
+               
+mode001         MOVE.B  #'A',(A1)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                RTS
+               
+mode010         MOVE.B  #'(',(A1)+
+                MOVE.B  #'A',(A1)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                MOVE.B  #')',(A1)+
+                                
+                RTS
+               
+mode011         MOVE.B  #'(',(A1)+
+                MOVE.B  #'A',(A1)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                MOVE.B  #')',(A1)+
+                MOVE.B  #'+',(A1)+
+                
+                RTS
+               
+mode100         MOVE.B  #'-',(A1)+
+                MOVE.B  #'(',(A1)+
+                MOVE.B  #'A',(A1)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                MOVE.B  #')',(A1)+
+                
+                RTS
+               
+mode111         LEA     abs_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)
+                
+                RTS
+
+*----------------------- Register Mode Table ------------------------------
+reg_table       JMP     reg000      *0
+                JMP     reg001      *1
+                JMP     reg010      *2
+                JMP     reg011      *3
+                JMP     reg100      *4
+                JMP     reg101      *5
+                JMP     reg110      *6
+                JMP     reg111      *7
+                
+reg000          MOVE.B  #'0',(A1)+
+                RTS
+                
+reg001          MOVE.B  #'1',(A1)+
+                RTS
+                
+reg010          MOVE.B  #'2',(A1)+
+                RTS
+                
+reg011          MOVE.B  #'3',(A1)+
+                RTS
+                
+reg100          MOVE.B  #'4',(A1)+
+                RTS
+
+reg101          MOVE.B  #'5',(A1)+
+                RTS
+
+reg110          MOVE.B  #'6',(A1)+
+                RTS
+
+reg111          MOVE.B  #'7',(A1)+
+                RTS
+                
+*-------------------------- Absolute Mode Table ----------------------------
+abs_table       JMP     abs000      *(xxx).W
+                JMP     abs001      *(xxx).L
+                JMP     abs100      *#<data>
+
+instructionArray      DS.L    32
+
+                END    START        
+
+
+
+
