@@ -1,0 +1,309 @@
+*--------------------------------------------------------------------
+* Description:  D5 currently holds mode, D6 currently holds register, D2 holds source, D3 holds dest
+*--------------------------------------------------------------------
+                ORG    $1000
+START:
+
+sourceData1     EQU     %000011         *mode=000, Reg=3
+sourceData2     EQU     %001100         *mode=001, Reg=4
+destData        EQU     %001000         *Reg=1, mode=000 
+start_addr      EQU     $7002
+                 
+                                        *A2 points to mode_table
+                                        *A3 points to reg_table
+                LEA     buffer,A4       *A4 is buffer
+                LEA     start_addr,A5   *A5 points to starting address
+                MOVE.B  #$00,(A4)       *Add 00 to buffer
+*------------------------- Source Data ------------------------------
+                MOVE.W  #sourceData2,D2 *copy source data to d2
+                
+                *********** Mode **********
+                CLR.L   D5
+                MOVE.W  D2,D5
+                
+                LSR.W   #3, D5          *Shift 3 bits to the right to get rid of register #
+                                        *3-bit mode# is now in D5   
+                
+                ********** Register ********
+                CLR.L   D6
+                MOVE.W  D2,D6
+                
+                LSL.W   #8,D6           *Shift to the left to get register # separate from mode
+                LSL.W   #5,D6
+                
+                LSR.L   #8,D6           *Shift back to the right to get register number
+                LSR.L   #5,D6
+                                        *3-bit register# is now in D6
+                
+                LEA     mode_table,A2   
+                MULU    #6,D5           *Form offset
+                JSR     0(A2,D5)        *Jump indirect with index
+                
+                MOVE.B  #',',(A4)+
+                
+*------------------------ Destination Data --------------------------
+                MOVE.W  #destData,D3  
+                
+                *********** Register **********
+                CLR.L   D6
+                MOVE.W  D3,D6
+                
+                LSR.W   #3,D6           *Shift 3 bits to the right to get rid of mode #
+                
+                                        *3-bit register# is now in D6
+                
+                ************ Mode ************
+                CLR.L   D5
+                MOVE.W  D3,D5
+                
+                LSL.W   #8,D5           *Shift to the left to get mode # separate from register
+                LSL.W   #5,D5
+                
+                LSR.L   #8,D5           *Shift back to the right to isolate mode number
+                LSR.L   #5,D5
+                                        *3-bit mode# is now in D5   
+                
+                LEA     mode_table,A2
+                MULU    #6,D5           *Form offset
+                JSR     0(A2,D5)        *Jump indirect with index
+                
+*-------------------- Addressing Mode Table ----------------------------
+mode_table      JMP     mode000         * Data Register - Dn
+                JMP     mode001         * Address Register - An
+                JMP     mode010         * Indirect Address Register - (An)
+                JMP     mode011         * Address Post Increment - (An)+
+                JMP     mode100         * Address Pre Decrement - -(An)
+                *JMP     mode101        * ERROR EA
+                *JMP     mode110        * ERROR EA
+                JMP     mode111         *(xxx).W, (xxx).L, #<data>
+            
+mode000         CMP     #$000,D5
+                MOVE.B  #'D',(A4)+
+                
+                LEA     reg_table,A3    *Load jump table for reg_table
+                MULU    #6,D6
+                JSR     0(A3,D6)        *Print number
+                
+                RTS
+               
+mode001         CMP     #$001,D5
+                MOVE.B  #'A',(A4)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)        *Print number
+                
+                RTS
+               
+mode010         MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)        *Print number
+                
+                MOVE.B  #')',(A4)+
+                                
+                RTS
+               
+mode011         MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)        *Print number
+                
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                
+                RTS
+               
+mode100         MOVE.B  #'-',(A4)+
+                MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                LEA     reg_table,A3
+                MULU    #6,D6           
+                JSR     0(A3,D6)        *Print number
+                
+                MOVE.B  #')',(A4)+
+                
+                RTS
+               
+mode111         LEA     abs_table,A3
+                MULU    #6,D6
+                JSR     0(A3,D6)    
+                
+                RTS
+
+*----------------------- Register Mode Table ------------------------------
+reg_table       JMP     reg000          *0
+                JMP     reg001          *1
+                JMP     reg010          *2
+                JMP     reg011          *3
+                JMP     reg100          *4
+                JMP     reg101          *5
+                JMP     reg110          *6
+                JMP     reg111          *7
+                
+reg000          MOVE.B  #'0',(A4)+
+                RTS
+                
+reg001          CMP     #$001,D6
+                MOVE.B  #'1',(A4)+
+                RTS
+                
+reg010          MOVE.B  #'2',(A4)+
+                RTS
+                
+reg011          MOVE.B  #'3',(A4)+
+                RTS
+                
+reg100          MOVE.B  #'4',(A4)+
+                RTS
+
+reg101          MOVE.B  #'5',(A4)+
+                RTS
+
+reg110          MOVE.B  #'6',(A4)+
+                RTS
+            
+reg111          MOVE.B  #'7',(A4)+
+                RTS
+                
+*--------------------- Absolute/ Immediate Mode Table -----------------------
+abs_table       JMP     abs000          *(xxx).W    *Size has to be W= two bytes
+                JMP     abs001          *(xxx).L    *Size has to be L = four bytes
+                JMP     abs100          *#<data>    *Size can be B,W,L
+                *JMP     abs010         *Error mode
+                *JMP     abs011         *Error mode
+                
+abs000          MOVE.B  #'$',(A4)+   
+
+                CLR.L   D4
+                MOVE.W (A5)+,D4     *Move word address from starting address pointer into D4
+                
+                ************ (0)000 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the first four bits
+                
+                LEA     hex_table,A6
+                MULU    #6,D7
+                JSR     0(A6,D7)    *To print first digit of word
+                
+                ************ 0(0)00 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #4,D7       *Shift 4 bits to the left to get rid of first digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the second digit
+                
+                LEA     hex_table,A6
+                MULU    #6,D7
+                JSR     0(A6,D7)    *To print second digit of word
+                
+                ************ 00(0)0 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7       *Shift 8 bits to the left to get rid of first and second digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the third digit
+                
+                LEA     hex_table,A6
+                MULU    #6,D7
+                JSR     0(A6,D7)    *To print third digit of word
+                
+                ************ 000(0) **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7
+                LSL.W   #4,D7       *Shift 12 bits to the left to get rid of beginning digits
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift 12 bits to the right to isolate the last digit
+                
+                LEA     hex_table,A6
+                MULU    #6,D7
+                JSR     0(A6,D7)    *To print last digit of word
+                RTS
+
+abs001          MOVE.B #'$',(A4)+   
+
+abs100          MOVE.B #'#',(A4)+   
+
+            
+*------------------------------ Hex Numbers ---------------------------------
+hex_table       JMP     num0          *0
+                JMP     num1          *1
+                JMP     num2          *2
+                JMP     num3          *3
+                JMP     num4          *4
+                JMP     num5          *5
+                JMP     num6          *6
+                JMP     num7          *7
+                JMP     num0          *8
+                JMP     num9          *9
+                JMP     numA          *A
+                JMP     numB          *B
+                JMP     numC          *C
+                JMP     numD          *D
+                JMP     numE          *E
+                JMP     numF          *F
+                
+num0            MOVE.B  #'0',(A4)+
+                RTS
+                
+num1            MOVE.B  #'1',(A4)+
+                RTS
+                
+num2            MOVE.B  #'2',(A4)+
+                RTS
+                
+num3            MOVE.B  #'3',(A4)+
+                RTS
+                
+num4            MOVE.B  #'4',(A4)+
+                RTS
+
+num5            MOVE.B  #'5',(A4)+
+                RTS
+
+num6            MOVE.B  #'6',(A4)+
+                RTS
+            
+num7            MOVE.B  #'7',(A4)+
+                RTS
+                
+num8            MOVE.B  #'8',(A4)+
+                RTS
+                
+num9            MOVE.B  #'9',(A4)+
+                RTS
+                
+numA            MOVE.B  #'A',(A4)+
+                RTS
+                
+numB            MOVE.B  #'B',(A4)+
+                RTS
+                
+numC            MOVE.B  #'C',(A4)+
+                RTS
+
+numD            MOVE.B  #'D',(A4)+
+                RTS
+
+numE            MOVE.B  #'E',(A4)+
+                RTS
+            
+numF            MOVE.B  #'F',(A4)+
+                RTS
+                  
+     
+buffer    DS.L    32
+ 
+                END    START        
+
+
+
+
