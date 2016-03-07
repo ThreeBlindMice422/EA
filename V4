@@ -1,0 +1,611 @@
+*--------------------------------------------------------------------
+* Description:  D5 currently holds mode
+*               D6 currently holds register
+*               D2 holds source data
+*               D3 holds dest data
+*               (xxx).W and (xxx).L currently prints all 0's
+*--------------------------------------------------------------------
+                              ORG    $1000
+START:
+               
+sourceData2     EQU     %111001         *mode=001, Reg=4
+destData        EQU     %001000         *Reg=1, mode=000 
+start_addr      EQU     $7002
+
+                LEA     start_addr,A5   *A5 points to starting address
+      
+                LEA     buffer,A4       *A4 is buffer
+                
+*------------------------- Source Data ------------------------------
+                CLR.L   D2
+                MOVE.W  #sourceData2,D2 *copy source data to d2
+                
+                *********** Mode **********
+                CLR.L   D5
+                MOVE.W  D2,D5
+                
+                LSR.W   #3, D5          *Shift 3 bits to the right to get rid of register #
+                                        *3-bit mode# is now in D5   
+                
+                ********** Register ********
+                CLR.L   D6
+                MOVE.W  D2,D6
+                
+                LSL.W   #8,D6           *Shift to the left to get register # separate from mode
+                LSL.W   #5,D6
+                
+                LSR.L   #8,D6           *Shift back to the right to get register number
+                LSR.L   #5,D6
+                                        *3-bit register# is now in D6
+                                        
+                MOVE.W  #1,counter      *Start counter at 1 for first loop
+                
+                BRA     mode_table
+               
+                
+*------------------------ Destination Data --------------------------
+
+dest            MOVE.B  #',',(A4)+
+                MOVE.B  #' ',(A4)+
+                
+                CLR.L   D3
+                MOVE.W  #destData,D3  
+                
+                *********** Register **********
+                CLR.L   D6
+                MOVE.W  D3,D6
+                
+                LSR.W   #3,D6           *Shift 3 bits to the right to get rid of mode #
+                
+                                        *3-bit register# is now in D6
+                
+                ************ Mode ************
+                CLR.L   D5
+                MOVE.W  D3,D5
+                
+                LSL.W   #8,D5           *Shift to the left to get mode # separate from register
+                LSL.W   #5,D5
+                
+                LSR.L   #8,D5           *Shift back to the right to isolate mode number
+                LSR.L   #5,D5
+                                        *3-bit mode# is now in D5   
+                
+                ADD     #1,counter      *Add 1 to counter to represent second loop
+                
+                BRA     mode_table
+                
+*-------------------- Addressing Mode Table ----------------------------
+mode_table      CMP.W   #%000,D5    *Data Register - Dn
+                BEQ     mode000
+                CMP.W   #%001,D5    *Address Register - An
+                BEQ     mode001
+                CMP.W   #%010,D5    *Indirect Address Register - (An)
+                BEQ     mode010
+                CMP.W   #%011,D5    *Address Post Increment - (An)
+                BEQ     mode011
+                CMP.W   #%100,D5    *Address Pre Decrement - -(An)
+                BEQ     mode100
+                CMP.W   #%111,D5    *(xxx).W, (xxx).L, #<data>
+                BEQ     mode111
+                
+                BNE     error
+                
+mode000         MOVE.B  #'D',(A4)+
+                
+                BRA     reg_table
+                
+               
+mode001         MOVE.B  #'A',(A4)+
+                
+                BRA     reg_table
+               
+               
+mode010         MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                BRA     in_table
+                                
+               
+mode011         MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                BRA     post_table
+               
+               
+mode100         MOVE.B  #'-',(A4)+
+                MOVE.B  #'(',(A4)+
+                MOVE.B  #'A',(A4)+
+                
+                BRA     pre_table
+               
+mode111         BRA     abs_table  
+                
+                
+*------------------------ Dn/An Register Mode Table --------------------------
+reg_table       CMP     #0,D6
+                BEQ     reg000
+                CMP     #1,D6
+                BEQ     reg001
+                CMP     #2,D6
+                BEQ     reg010
+                CMP     #3,D6
+                BEQ     reg011
+                CMP     #4,D6
+                BEQ     reg100
+                CMP     #5,D6
+                BEQ     reg101
+                CMP     #6,D6
+                BEQ     reg110
+                CMP     #7,D6
+                BEQ     reg111
+                
+                BNE     error
+                
+reg000          MOVE.B  #'0',(A4)+
+                BRA     checkCounter
+                
+reg001          MOVE.B  #'1',(A4)+
+                BRA     checkCounter
+                
+reg010          MOVE.B  #'2',(A4)+
+                BRA     checkCounter
+                
+reg011          MOVE.B  #'3',(A4)+
+                BRA     checkCounter
+                
+reg100          MOVE.B  #'4',(A4)+
+                BRA     checkCounter
+                
+reg101          MOVE.B  #'5',(A4)+
+                BRA     checkCounter
+                
+reg110          MOVE.B  #'6',(A4)+
+                BRA     checkCounter
+                
+reg111          MOVE.B  #'7',(A4)+
+                BRA     checkCounter
+                
+*------------------------- Register Mode Table (An) ------------------------------
+in_table        CMP     #0,D6
+                BEQ     in000
+                CMP     #1,D6
+                BEQ     in001
+                CMP     #2,D6
+                BEQ     in010
+                CMP     #3,D6
+                BEQ     in011
+                CMP     #4,D6
+                BEQ     in100
+                CMP     #5,D6
+                BEQ     in101
+                CMP     #6,D6
+                BEQ     in110
+                CMP     #7,D6
+                BEQ     in111
+                
+                BNE     error
+                
+in000           MOVE.B  #'0',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in001           MOVE.B  #'1',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in010           MOVE.B  #'2',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in011           MOVE.B  #'3',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in100           MOVE.B  #'4',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in101           MOVE.B  #'5',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in110           MOVE.B  #'6',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+in111           MOVE.B  #'7',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+*----------------------- Register Mode Table (An)+ ------------------------------
+post_table      CMP     #0,D6
+                BEQ     post000
+                CMP     #1,D6
+                BEQ     post001
+                CMP     #2,D6
+                BEQ     post010
+                CMP     #3,D6
+                BEQ     post011
+                CMP     #4,D6
+                BEQ     post100
+                CMP     #5,D6
+                BEQ     post101
+                CMP     #6,D6
+                BEQ     post110
+                CMP     #7,D6
+                BEQ     post111
+                
+                BNE     error
+                
+post000         MOVE.B  #'0',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post001         MOVE.B  #'1',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post010         MOVE.B  #'2',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post011         MOVE.B  #'3',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post100         MOVE.B  #'4',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post101         MOVE.B  #'5',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post110         MOVE.B  #'6',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+post111         MOVE.B  #'7',(A4)+
+                MOVE.B  #')',(A4)+
+                MOVE.B  #'+',(A4)+
+                BRA     checkCounter
+                
+*----------------------- Register Mode Table -(An) ------------------------------
+pre_table       CMP     #0,D6
+                BEQ     pre000
+                CMP     #1,D6
+                BEQ     pre001
+                CMP     #2,D6
+                BEQ     pre010
+                CMP     #3,D6
+                BEQ     pre011
+                CMP     #4,D6
+                BEQ     pre100
+                CMP     #5,D6
+                BEQ     pre101
+                CMP     #6,D6
+                BEQ     pre110
+                CMP     #7,D6
+                BEQ     pre111
+                
+                BNE     error
+                
+pre000          MOVE.B  #'0',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre001          MOVE.B  #'1',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre010          MOVE.B  #'2',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre011          MOVE.B  #'3',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre100          MOVE.B  #'4',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre101          MOVE.B  #'5',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre110          MOVE.B  #'6',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+                
+pre111          MOVE.B  #'7',(A4)+
+                MOVE.B  #')',(A4)+
+                BRA     checkCounter
+
+*------------------- Absolute/ Immediate Register Mode Table -----------------------
+abs_table       CMP     #0,D6
+                BEQ     abs000          *(xxx).W    *Size has to be W= two bytes
+                CMP     #1,D6
+                BEQ     abs001          *(xxx).L    *Size has to be L = four bytes
+                CMP     #4,D6
+                BEQ     abs100          *#<data>    *Size can be B,W,L
+                
+                BNE     error
+                
+abs000          MOVE.B  #'$',(A4)+   
+
+                CLR.L   D4
+                MOVE.W (A5)+,D4     *Move word address from starting address pointer into D4
+                
+                ************ (0)000 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the first four bits
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)     
+                
+                ************ 0(0)00 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #4,D7       *Shift 4 bits to the left to get rid of first digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the second digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)      
+                
+                ************ 00(0)0 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7       *Shift 8 bits to the left to get rid of first and second digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the third digit
+                                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)   
+                
+                ************ 000(0) **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7
+                LSL.W   #4,D7       *Shift 12 bits to the left to get rid of beginning digits
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift 12 bits to the right to isolate the last digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7) 
+                
+                BRA     checkCounter
+
+abs001          MOVE.B #'$',(A4)+  
+ 
+                *FIRST WORD
+                CLR.L   D4
+                MOVE.W (A5)+,D4     *Move word address from starting address pointer into D4
+                
+                ************ (0)000 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the first four bits
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)     
+                
+                ************ 0(0)00 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #4,D7       *Shift 4 bits to the left to get rid of first digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the second digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)      
+                
+                ************ 00(0)0 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7       *Shift 8 bits to the left to get rid of first and second digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the third digit
+                                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)   
+                
+                ************ 000(0) **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7
+                LSL.W   #4,D7       *Shift 12 bits to the left to get rid of beginning digits
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift 12 bits to the right to isolate the last digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7) 
+                
+                *SECOND WORD
+                
+                CLR.L   D4
+                MOVE.W (A5)+,D4     *Move word address from starting address pointer into D4
+                
+                ************ (0)000 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the first four bits
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)     
+                
+                ************ 0(0)00 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #4,D7       *Shift 4 bits to the left to get rid of first digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the second digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)      
+                
+                ************ 00(0)0 **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7       *Shift 8 bits to the left to get rid of first and second digit
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift a total of 12 bits to the right to isolate the third digit
+                                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7)   
+                
+                ************ 000(0) **************
+                CLR.L   D7
+                MOVE.W  D4,D7       *Copy data from D4 into D7
+                LSL.W   #8,D7
+                LSL.W   #4,D7       *Shift 12 bits to the left to get rid of beginning digits
+                LSR.W   #8,D7       
+                LSR.W   #4,D7       *Shift 12 bits to the right to isolate the last digit
+                
+                MULU.W  #8,D7       
+                LEA     hex_table,A6 
+                JSR     (A6,D7) 
+                
+                BRA     checkCounter
+
+abs100          MOVE.B #'#',(A4)+
+                MOVE.B #'$',(A4)+    
+                
+                *#<Byte>
+                
+                *#<Word>
+                
+                *#<Long>
+
+            
+*------------------------------ Hex Numbers ---------------------------------
+hex_table       CMP     #$0,D7        *0
+                BEQ     num0
+                CMP     #$1,D7
+                BEQ     num1          *1
+                CMP     #$2,D7
+                BEQ     num2          *2
+                CMP     #$3,D7
+                BEQ     num3          *3
+                CMP     #$4,D7
+                BEQ     num4          *4
+                CMP     #$5,D7
+                BEQ     num5          *5
+                CMP     #$6,D7
+                BEQ     num6          *6
+                CMP     #$7,D7
+                BEQ     num7          *7
+                CMP     #$8,D7
+                BEQ     num0          *8
+                CMP     #$9,D7
+                BEQ     num9          *9
+                CMP     #$A,D7
+                BEQ     numA          *A
+                CMP     #$B,D7
+                BEQ     numB          *B
+                CMP     #$C,D7
+                BEQ     numC          *C
+                CMP     #$D,D7
+                BEQ     numD          *D
+                CMP     #$E,D7
+                BEQ     numE          *E
+                CMP     #$F,D7
+                BEQ     numF          *F
+                
+num0            MOVE.B  #'0',(A4)+
+                RTS
+                
+num1            MOVE.B  #'1',(A4)+                
+                RTS
+                
+num2            MOVE.B  #'2',(A4)+                
+                RTS
+                
+num3            MOVE.B  #'3',(A4)+               
+                RTS
+                
+num4            MOVE.B  #'4',(A4)+                
+                RTS
+
+num5            MOVE.B  #'5',(A4)+
+                RTS
+
+num6            MOVE.B  #'6',(A4)+
+                RTS
+            
+num7            MOVE.B  #'7',(A4)+
+                RTS
+                
+num8            MOVE.B  #'8',(A4)+
+                RTS
+                
+num9            MOVE.B  #'9',(A4)+
+                RTS
+                
+numA            MOVE.B  #'A',(A4)+
+                RTS
+                
+numB            MOVE.B  #'B',(A4)+
+                RTS
+                
+numC            MOVE.B  #'C',(A4)+
+                RTS
+
+numD            MOVE.B  #'D',(A4)+
+                RTS
+
+numE            MOVE.B  #'E',(A4)+
+                RTS
+            
+numF            MOVE.B  #'F',(A4)+
+                RTS
+  
+*------------------------------- Print Buffer -----------------------------
+checkCounter    CMP     #2,counter      *If you have already checked source and destination, counter=2
+                BEQ     done            *Branch to print out data in the buffer
+                
+                BRA     dest            *If counter=1, branch back to dest
+           
+error           MOVE.B #'E',(A4)+
+                MOVE.B #'R',(A4)+
+                MOVE.B #'R',(A4)+
+                MOVE.B #'O',(A4)+
+                MOVE.B #'R',(A4)+
+                
+                BRA    done
+
+done            MOVE.B  #$00,(A4)       *Add 00 to buffer
+                LEA     buffer,A1       *Buffer will hold both source and destination info
+                MOVE.B  #14 ,D0
+                TRAP    #15 
+                
+                MOVE.B  #9,D0
+                TRAP    #15
+
+buffer          DS.B    80              
+counter         DS.B    1               *Holds 1 to begin with
+                
+                END    START        
